@@ -10,65 +10,65 @@
 HAProxy is a powerful load balancer. It embeds many options and many
 configuration styles in order to give a solution to many load balancing
 problems. However, HAProxy is not universal and some special or specific
-problems do not have solution with the native software.
+problems do not have solutions with the native software.
 
 This text is not a full explanation of the Lua syntax.
 
 This text is not a replacement of the HAProxy Lua API documentation. The API
 documentation can be found at the project root, in the documentation directory.
-The goal of this text is to discover how Lua is implemented in HAProxy and using
-it efficiently.
+The goal of this text is to describe how Lua is implemented in HAProxy and how
+to use it efficiently.
 
-However, this can be read by Lua beginners. Some examples are detailed.
+Still, this document should be informative even without prior Lua experience.
+Some examples are detailed.
 
 Why a scripting language in HAProxy
 ===================================
 
-HAProxy 1.5 makes at possible to do many things using samples, but some people
-want to more combining results of samples fetches, programming conditions and
-loops which is not possible. Sometimes people implement these functionnalities
-in patches which have no meaning outside their network. These people must
-maintain these patches, or worse we must integrate them in the HAProxy
-mainstream.
+HAProxy 1.5 makes it possible to do many things using samples, but some people
+want more powerful options, such as combining sample fetches, using
+conditionals, or loops, none of which were possible or elegant before.
+Sometimes people implement these functionalities in patches which have no
+meaning outside their network. These people must maintain these patches, or
+worse we must integrate them into the HAProxy mainstream.
 
 Their need is to have an embedded programming language in order to no longer
 modify the HAProxy source code, but to write their own control code. Lua is
 encountered very often in the software industry, and in some open source
 projects. It is easy to understand, efficient, light without external
-dependancies, and leaves the resource control to the implementation. Its design
+dependencies, and leaves the resource control to the implementation. Its design
 is close to the HAProxy philosophy which uses components for what they do
 perfectly.
 
-The HAProxy control block allows one to take a decision based on the comparison
-between samples and patterns. The samples are extracted using fetch functions
+The HAProxy control block allows one to make a decision based comparisons
+between samples and patterns. The samples are extracted using fetch functions which are
 easily extensible, and are used by actions which are also extensible. It seems
 natural to allow Lua to give samples, modify them, and to be an action target.
 So, Lua uses the same entities as the configuration language. This is the most
-natural and reliable way for the Lua integration. So, the Lua engine allows one
+natural and reliable strategy for the Lua integration. The Lua engine allows one
 to add new sample fetch functions, new converter functions and new actions.
-These new entities can access the existing samples fetches and converters
-allowing to extend them without rewriting them.
+These new entities can access the existing sample fetches and converters
+allowing us to extend them without rewriting the existing logic.
 
 The writing of the first Lua functions shows that implementing complex concepts
-like protocol analysers is easy and can be extended to full services. It appears
-that these services are not easy to implement with the HAProxy configuration
-model which is based on four steps: fetch, convert, compare and action. HAProxy
-is extended with a notion of services which are a formalisation of the existing
+like protocol analysers is easy and can be extended to more featureful services which would be difficult to implement with the traditional HAProxy configuration
+model which is based on four steps: fetch, convert, compare and act. HAProxy
+is extended with a notion of services, which are a formalisation of the existing
 services like stats, cli and peers. The service is an autonomous entity with a
 behaviour pattern close to that of an external client or server. The Lua engine
 inherits from this new service and offers new possibilities for writing
 services.
 
 This scripting language is useful for testing new features as proof of concept.
-Later, if there is general interest, the proof of concept could be integrated
+Later, if there is general interest, the new feature could be integrated
 with C language in the HAProxy core.
 
-The HAProxy Lua integration also provides a simple way for distributing Lua
-packages. The final user needs only to install the Lua file, load it in HAProxy
+The HAProxy Lua integration also provides a simple way to distribute Lua
+packages. The end user needs only to install the Lua file, load it in HAProxy
 and follow the attached documentation.
 
-Design and technical things
-===========================
+Design and technical considerations
+===================================
 
 Lua is integrated into the HAProxy event driven core. We want to preserve the
 fast processing of HAProxy. To ensure this, we implement some technical concepts
@@ -78,35 +78,34 @@ The following paragraph also describes the interactions between Lua and HAProxy
 from a technical point of view.
 
 Prerequisite
------------
+------------
 
-Reading the following documentation links is required to understand the
-current paragraph:
+Reading the following documentation links is required to fully understand this section:
 
    HAProxy doc: http://cbonte.github.io/haproxy-dconv/configuration-1.6.html
    Lua API:     http://www.lua.org/manual/5.3/
    HAProxy API: http://www.arpalert.org/src/haproxy-lua-api/1.6/index.html
    Lua guide:   http://www.lua.org/pil/
 
-more about Lua choice
+More about the Lua choice
 ---------------------
 
-Lua language is very simple to extend. It is easy to add new functions written
+The Lua language is very simple to extend. It is easy to add new functions written
 in C in the core language. It is not required to embed very intrusive libraries,
-and we do not change compilation processes.
+and we do not have to change existing compilation processes.
 
-The amount of memory consumed can be controlled, and the issues due to lack of
-memory are perfectly caught. The maximum amount of memory allowed for the Lua
-processes is configurable. If some memory is missing, the current Lua action
+The amount of memory consumed can be controlled, and issues due to lack of
+memory are easily detected. The maximum amount of memory allowed for the Lua
+processes is configurable. When insufficient memory is available, the current Lua action
 fails, and the HAProxy processing flow continues.
 
-Lua provides a way for implementing event driven design. When the Lua code
+Lua provides a way to implement event driven design. When the Lua code
 wants to do a blocking action, the action is started, it executes non blocking
 operations, and returns control to the HAProxy scheduler when it needs to wait
 for some external event.
 
-The Lua process can be interrupted after a number of instructions executed. The
-Lua execution will resume later. This is a useful way for controlling the
+The Lua process can be interrupted after a number of instructions are executed. The
+Lua execution will resume later. This is a useful way to control the
 execution time. This system also keeps HAProxy responsive. When the Lua
 execution is interrupted, HAProxy accepts some connections or transfers pending
 data. The Lua execution does not block the main HAProxy processing, except in
@@ -134,31 +133,30 @@ these functions:
 
 These functions are the execution entry points.
 
-HTTP action must be used for manipulating HTTP request headers. This action
-can not manipulates HTTP content. It is dangerous to use the channel
+The HTTP action must be used for manipulating HTTP request headers. This action
+cannot manipulate HTTP content. It is dangerous to use the channel
 manipulation object with an HTTP request in an HTTP action. The channel
-manipulation can transform a valid request in an invalid request. In this case,
+manipulation can transform a valid request into an invalid request. In this case,
 the action will never resume and the processing will be frozen. HAProxy
 discards the request after the reception timeout.
 
-Non blocking design
+Non-blocking design
 -------------------
 
-HAProxy is an event driven software, so blocking system calls are absolutely
-forbidden. However, the Lua allows to do blocking actions. When an action
-blocks, HAProxy is waiting and do nothing, so the basic functionalities like
-accepting connections or forwarding data are blocked while the end of the system
+HAProxy is an event driven application, so blocking system calls are absolutely
+forbidden. However, Lua allows blocking actions. When an action
+blocks, HAProxy is waiting and doing nothing, so basic functionalities like
+accepting connections or forwarding data are blocked until the end of the system
 call. In this case HAProxy will be less responsive.
 
-This is very insidious because when the developer tries to execute its Lua code
+This is very insidious because when the developer tests their Lua code
 with only one stream, HAProxy seems to run fine. When the code is used with
-production stream, HAProxy encounters some slow processing, and it cannot
-hold the load.
+production stream, performance is more severaly impacted.
 
-However, during the initialisation state, you can obviously using blocking
-functions. There are typically used for loading files.
+However, during the initialisation state, you can obviously use blocking
+functions. These are typically used for loading files.
 
-The list of prohibited standard Lua functions during the runtime contains all
+The list of prohibited standard Lua functions during the runtime includes any
 that do filesystem access:
 
  - os.remove()
@@ -170,37 +168,37 @@ that do filesystem access:
 
 Some other functions are prohibited:
 
- - os.execute(), waits for the end of the required execution blocking HAProxy.
+ - os.execute(), waits for the end of the required execution, blocking HAProxy.
 
- - os.exit(), is not really dangerous for the process, but it's not the good way
-              for exiting the HAProxy process.
+ - os.exit(), is not really dangerous for the process, but it's not a good way
+              to exit the HAProxy process.
 
  - print(), writes data on stdout. In some cases these writes are blocking, the
-            best practice is reserving this call for debugging. We must prefer
-            to use core.log() or TXN.log() for sending messages.
+            best practice is reserving this call for debugging. We should
+            use core.log() or TXN.log() for sending messages.
 
 Some HAProxy functions have a blocking behaviour pattern in the Lua code, but
-there are compatible with the non blocking design. These functions are:
+are still compatible with the non blocking design. These functions are:
 
- - All the socket class
+ - socket.*()
  - core.sleep()
 
 Responsive design
 -----------------
 
-HAProxy must process connections accept, forwarding data and processing timeouts
-as soon as possible. The first thing is to believe that a Lua script with a long
-execution time should impact the expected responsive behaviour.
+HAProxy must process accepting connections, forwarding data and processing timeouts
+as soon as possible. Upon first consideration it could be assumed that a long-running Lua script will
+impact the expected responsive behaviour.
 
-It is not the case, the Lua script execution are regularly interrupted, and
-HAProxy can process other things. These interruptions are exprimed in number of
+However, this is not the case, as Lua script execution is regularly interrupted, so
+HAProxy can process other things. The frequency of these interruptions is described as a number of
 Lua instructions. The number of interruptions between two interrupts is
 configured with the following "tune" option:
 
    tune.lua.forced-yield <nb>
 
-The default value is 10 000. For determining it, I ran benchmark on my laptop.
-I executed a Lua loop between 10 seconds with different values for the
+The default value is 10 000. To determine this default, I ran benchmark on my laptop.
+I executed a Lua loop for 10 seconds with different values for the
 "tune.lua.forced-yield" option, and I noted the results:
 
     configured    | Number of
@@ -219,24 +217,24 @@ I executed a Lua loop between 10 seconds with different values for the
     100000        | 710
     1000000       | 710
 
-The result showed that from 9000 instructions between two interrupt, we reached
+The result showed that around 9000 instructions between interrupts, we reached
 a ceil, so the default parameter is 10 000.
 
-When HAProxy interrupts the Lua processing, we have two states possible:
+When HAProxy interrupts Lua processing, we have two states possible:
 
  - Lua is resumable, and it returns control to the HAProxy scheduler,
  - Lua is not resumable, and we just check the execution timeout.
 
 The second case occurs if it is required by the HAProxy core. This state is
-forced if the Lua is processed in a non resumable HAProxy part, like sample
+forced if the Lua is processed in a non-resumable HAProxy part, like sample
 fetches or converters.
 
-It occurs also if the Lua is non resumable. For example, if some code is
+It occurs also if the Lua is non-resumable. For example, if some code is
 executed through the Lua pcall() function, the execution is not resumable. This
 is explained later.
 
-So, the Lua code must be fast and simple when is executed as sample fetches and
-converters, it could be slow and complex when is executed as actions and
+So, the Lua code should be fast and simple when executed as sample fetches or
+converters, but it may be slow and complex when executed as actions or
 services.
 
 Execution time
@@ -246,24 +244,23 @@ The Lua execution time is measured and limited. Each group of functions has its
 own timeout configured. The time measured is the real Lua execution time, and
 not the difference between the end time and the start time. The groups are:
 
- - main code and init are not submitted to the timeout,
- - fetches, converters and action have a default timeout of 4s,
+ - main code and init are not subjected to the timeout,
+ - fetches, converters and actions have a default timeout of 4s,
  - task, by default does not have timeout,
- - service have a default timeout of 4s.
+ - services have a default timeout of 4s.
 
 The corresponding tune options are:
 
- - tune.lua.session-timeout (fetches, converters and action)
+ - tune.lua.session-timeout (fetches, converters and actions)
  - tune.lua.task-timeout    (task)
  - tune.lua.service-timeout (services)
 
-The task does not have a timeout because it runs in background along the
+The task does not have a timeout because it runs in the background along the
 HAProxy process life.
 
-For example, if an Lua script is executed during 1.1s and the script executes a
-sleep of 1 second, the effective measured running time is 0.1s.
+For an example to clarify how the actual execution time is measured, if a Lua script is executed for 1.1s and the script executes a sleep of 1 second, the effective measured running time is 0.1s.
 
-This timeout is useful for preventing infinite loops. During the runtime, it
+This timeout is useful for preventing infinite loops. During runtime, it
 should be never triggered.
 
 The stack and the coprocess
@@ -275,21 +272,21 @@ which is common for all the process, and a secondary one used as coprocess.
 After the initialization, the main stack is no longer used by HAProxy, except
 for global storage. The second type of stack is used by all the Lua functions
 called from different Lua actions declared in HAProxy. The main stack permits
-to store coroutines pointers, and some global variables.
+storing coroutines pointers, and some global variables.
 
-Do you want to see an example of how seems Lua C development around a stack ?
-Some examples follows. This first one, is a simple addition:
+Do you want to see an example of what Lua C development around a stack looks like?
+Some examples follow. This first one, is a simple addition:
 
    lua_pushnumber(L, 1)
    lua_pushnumber(L, 2)
    lua_arith(L, LUA_OPADD)
 
 It's easy, we push 1 on the stack, after, we push 2, and finally, we perform an
-addition. The two top entries of the stack are added, poped, and the result is
+addition. The two top entries of the stack are added, popped, and the result is
 pushed. It is a classic way with a stack.
 
-Now an example for constructing array and objects. It's a little bit more
-complicated. The difficult consist to keep in mind the state of the stack while
+Now an example for constructing arrays and objects. It's a little bit more
+complicated. The difficulty is in keeping track of the state of the stack while
 we write the code. The goal is to create the entity described below. Note that
 the notation "*1" is a metatable reference. The metatable will be explained
 later.
@@ -328,12 +325,12 @@ Let's go:
    lua_settable(-3)
    lua_setglobal("name")
 
-So, coding for Lua in C, is not complex, but it needs some mental gymnastic.
+So, coding for Lua in C, is not complex, but it requires some mental gymnastics.
 
 The object concept and the HAProxy format
 -----------------------------------------
 
-The object seems to be not a native concept. An Lua object is a table. We can
+The object seems to be not a native concept. A Lua object is a table. We can
 note that the table notation accept three forms:
 
    1. mytable["entry"](mytable, "param")
@@ -350,33 +347,33 @@ So, an object is a table and each entry of the table is a variable. A variable
 can be a function. These are the first concepts of the object notation in the
 Lua, but it is not the end.
 
-With the objects, we usually expect classes and inheritance. This is the role of
-the metable. A metable is a table with predefined entries. These entries modify
+With objects, we usually expect classes and inheritance. This is the role of
+the metatable. A metatable is a table with predefined entries. These entries modify
 the default behaviour of the table. The simplest example is the "__index" entry.
 If this entry exists, it is called when a value is requested in the table. The
 behaviour is the following:
 
-   1 - looks in the table if the entry exists, and if it the case, return it
+   1 - check in the table if the entry exists, and if so, return it
 
-   2 - looks if a metatable exists, and if the "__index" entry exists
+   2 - check if a metatable exists, and if the "__index" entry exists
 
    3 - if "__index" is a function, execute it with the key as parameter, and
-       returns the result of the function.
+       return the result of the function.
 
-   4 - if "__index" is a table, looks if the requested entry exists, and if
-       exists, return it.
+   4 - if "__index" is a table, check if the requested entry exists, and if
+       so, return it.
 
    5 - if not exists, return to step 2
 
-The behaviour of the point 5 represents the inheritance.
+The behaviour of point 5 represents the inheritance.
 
 In HAProxy all the provided objects are tables, the entry "[0]" contains private
-data, there are often userdata or lightuserdata. The matatable is registered in
+data, there are often userdata or lightuserdata. The metatable is registered in
 the global part of the main Lua stack, and it is called with the case sensitive
 class name. A great part of these class must not be used directly because it
 requires an initialisation using the HAProxy internal structs.
 
-The HAProxy objects use unified conventions. An Lua object is always a table.
+The HAProxy objects use unified conventions. A Lua object is always a table.
 In most cases, an HAProxy Lua object needs some private data. These are always
 set in the index [0] of the array. The metatable entry "__tostring" returns the
 object name.
@@ -396,7 +393,7 @@ Common HAproxy objects are:
  - AppletHTTP : process client request like an HTTP server
  - Socket     : establish tcp connection to a server (ipv4/ipv6/socket/ssl/...)
 
-The garbage collector and the memory allocation
+The garbage collector and memory allocation
 -----------------------------------------------
 
 Lua doesn't really have a global memory limit, but HAProxy implements it. This
